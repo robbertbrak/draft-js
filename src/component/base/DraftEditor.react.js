@@ -80,6 +80,7 @@ class DraftEditor extends React.Component {
   };
 
   _blockSelectEvents: boolean;
+  _previousSelection: ?Object;
   _clipboard: ?BlockMap;
   _guardAgainstRender: boolean;
   _handler: ?Object;

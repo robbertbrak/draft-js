@@ -30,6 +30,7 @@ function editOnSelect(): void {
   var updatedSelectionState = documentSelection.selectionState;
 
   if (updatedSelectionState !== editorState.getSelection()) {
+    this._previousSelection = editorState.getSelection();
     if (documentSelection.needsRecovery) {
       editorState = EditorState.forceSelection(
         editorState,

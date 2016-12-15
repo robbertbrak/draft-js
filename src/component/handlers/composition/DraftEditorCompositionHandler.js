@@ -19,6 +19,8 @@ const Keys = require('Keys');
 const getEntityKeyForSelection = require('getEntityKeyForSelection');
 const isSelectionAtLeafStart = require('isSelectionAtLeafStart');
 
+const UserAgent = require('UserAgent');
+
 /**
  * Millisecond delay to allow `compositionstart` to fire again upon
  * `compositionend`.
@@ -28,6 +30,9 @@ const isSelectionAtLeafStart = require('isSelectionAtLeafStart');
  * triggers `compositionstart` a little slower than Chrome/FF, which
  * leads to composed characters being resolved and re-render occurring
  * sooner than we want.
+ *
+ * However, when typing Korean characters on IE11, we don't need this delay,
+ * so we'll ignore it in that case.
  */
 const RESOLVE_DELAY = 20;
 
@@ -42,9 +47,56 @@ let stillComposing = false;
 let textInputData = '';
 let formerTextInputData = '';
 
+/**
+ * As noted in https://github.com/facebook/draft-js/issues/359 and
+ * https://facebook.github.io/draft-js/docs/advanced-topics-issues-and-pitfalls.html#ime-and-internet-explorer,
+ * typing Korean in IE11 is very problematic for Draft.
+ * In particular, the compositionEnd event in IE11 often does not contain the
+ * proper value in the `data` attribute.
+ *
+ * As an example, when typing 'dufma' (ㅇ ㅕ ㄹ ㅡ ㅁ), the result should be 여름,
+ * thus combining the first 2 Jamo and the last 3 Jamo to form 2 Korean characters.
+ * During composition, the first 3 Jamo are temporarily combined into 열, but this becomes
+ * 여르 as soon as the 4th Jamo is typed.
+ *
+ * In Chrome, the compositionEnd event with '여' data is fired on typing the 4th Jamo, which is correct.
+ * In IE11, however, the compositionEnd event has '열' in the data attribute.
+ * Also, there is no other event that gives the right information.
+ * Therefore, we HAVE to read the DOM to find out which character was actually typed.
+ * Doing so is complicated by some extra factors:
+ * - when the compositionEnd event is fired, the DOM may already contain the next Korean character
+ *    that is being composed (르 in the above example), but only if the compositionEnd
+ *    is followed by another compositionStart event in the same composition session;
+ * - composition may be ended in a way that does not generate an input event,
+ *    for example when the right arrow key is pressed;
+ * - the editor selection state is reset incorrectly as soon as Korean input starts.
+ */
+
+let isIE = UserAgent.isBrowser('IE <= 11');
+let isKoreanOnIE = false;
+let lastKoreanCharacter = '';
+let nextToLastKoreanCharacter = '';
+
+// Source: https://en.wikipedia.org/wiki/Korean_language_and_computers
+const KOREAN_UNICODE_RANGES = [
+  [parseInt('AC00', 16), parseInt('D7A3', 16)],
+  [parseInt('1100', 16), parseInt('11FF', 16)],
+  [parseInt('3130', 16), parseInt('318F', 16)],
+  [parseInt('A960', 16), parseInt('A97F', 16)],
+  [parseInt('D7B0', 16), parseInt('D7FF', 16)]
+];
+
+let isKorean = function(charCode): boolean {
+  return KOREAN_UNICODE_RANGES.find((range) => charCode >= range[0] && charCode <= range[1]);
+};
+
 var DraftEditorCompositionHandler = {
   onBeforeInput: function(e: SyntheticInputEvent): void {
-    textInputData = (textInputData || '') + e.data;
+    // If we are typing Korean on IE11, the input event is unreliable.
+    // Instead, we maintain the typed chars in the compositionStart and compositionEnd handlers.
+    if (!lastKoreanCharacter) {
+      textInputData = (textInputData || '') + e.data;
+    }
   },
 
   /**
@@ -54,6 +106,15 @@ var DraftEditorCompositionHandler = {
   onCompositionStart: function(e): void {
     formerTextInputData = e.data;
     stillComposing = true;
+
+    // For Korean on IE11, continued composition means that the last character in the DOM
+    // is the one currently being composed (and is still unfinished).
+    // The 'next to last' char is the one that should have been committed in the previous
+    // compositionEnd event.
+    if (nextToLastKoreanCharacter) {
+      textInputData = textInputData.substring(0, textInputData.length - 1) + nextToLastKoreanCharacter;
+      nextToLastKoreanCharacter = '';
+    }
   },
 
   /**
@@ -70,14 +131,37 @@ var DraftEditorCompositionHandler = {
    * twice could break the DOM, we only use the first event. Example: Arabic
    * Google Input Tools on Windows 8.1 fires `compositionend` three times.
    */
-  onCompositionEnd: function(): void {
+  onCompositionEnd: function(e): void {
     resolved = false;
     stillComposing = false;
+
+    // For Korean on IE11, the composition end event may not contain
+    // the character that has actually been typed when the event is
+    // followed by composition start. In this case, we read the proper
+    // characters from the DOM.
+    lastKoreanCharacter = '';
+    nextToLastKoreanCharacter = '';
+    if (isIE && e.data && isKorean(e.data.charCodeAt(0))) {
+      let domSelection = global.getSelection();
+      let content = domSelection.anchorNode.textContent;
+      let i = domSelection.anchorOffset - 1;
+      while (i >= 0) {
+        if (isKorean(content.charCodeAt(i))) {
+          isKoreanOnIE = true;
+          lastKoreanCharacter = content.charAt(i);
+          nextToLastKoreanCharacter = content.charAt(i - 1);
+          textInputData = (textInputData || '') + lastKoreanCharacter;
+          break;
+        }
+        i--;
+      }
+    }
+
     setTimeout(() => {
       if (!resolved) {
         DraftEditorCompositionHandler.resolveComposition.call(this);
       }
-    }, RESOLVE_DELAY);
+    }, isKoreanOnIE ? 0 : RESOLVE_DELAY);
   },
 
   /**
@@ -88,6 +172,10 @@ var DraftEditorCompositionHandler = {
   onKeyDown: function(e: SyntheticKeyboardEvent): void {
     if (e.which === Keys.RIGHT || e.which === Keys.LEFT) {
       e.preventDefault();
+    }
+    if (isKoreanOnIE) {
+      lastKoreanCharacter = '';
+      nextToLastKoreanCharacter = '';
     }
   },
 
@@ -124,6 +212,12 @@ var DraftEditorCompositionHandler = {
     }
 
     resolved = true;
+
+    const wasKoreanOnIE = isKoreanOnIE;
+    isKoreanOnIE = false;
+    lastKoreanCharacter = '';
+    nextToLastKoreanCharacter = '';
+
     const composedChars = textInputData;
     textInputData = '';
 
@@ -156,7 +250,7 @@ var DraftEditorCompositionHandler = {
 
     let contentState = editorState.getCurrentContent();
     let selection = editorState.getSelection();
-    if (formerComposedChars && selection.isCollapsed()) {
+    if (!wasKoreanOnIE && formerComposedChars && selection.isCollapsed()) {
       var anchorOffset = selection.getAnchorOffset() - formerComposedChars.length;
       if (anchorOffset < 0) {
         anchorOffset = 0;
@@ -173,9 +267,11 @@ var DraftEditorCompositionHandler = {
     if (composedChars) {
       // If characters have been composed, re-rendering with the update
       // is sufficient to reset the editor.
+      // For Korean on IE11, the desired selection to replace will have
+      // been overwritten at the start of the composition session, so we'll reset it here.
       contentState = DraftModifier.replaceText(
         contentState,
-        selection,
+        wasKoreanOnIE ? this._previousSelection : selection,
         composedChars,
         currentStyle,
         entityKey
