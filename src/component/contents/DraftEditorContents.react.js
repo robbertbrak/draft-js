@@ -101,7 +101,7 @@ class DraftEditorContents extends React.Component {
 
     const content = editorState.getCurrentContent();
     const selection = editorState.getSelection();
-    const forceSelection = editorState.mustForceSelection();
+    const forceSelection = editorState.mustForceSelection() && !editorState.isInCompositionMode();
     const decorator = editorState.getDecorator();
     const directionMap = nullthrows(editorState.getDirectionMap());
 
