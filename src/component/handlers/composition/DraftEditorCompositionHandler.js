@@ -73,6 +73,7 @@ let formerTextInputData = '';
  */
 
 let isIE = UserAgent.isBrowser('IE <= 11');
+let isWin10 = UserAgent.isPlatform('Windows 10');
 let isKoreanOnIE = false;
 let lastKoreanCharacter = '';
 let nextToLastKoreanCharacter = '';
@@ -271,7 +272,7 @@ var DraftEditorCompositionHandler = {
       // been overwritten at the start of the composition session, so we'll reset it here.
       contentState = DraftModifier.replaceText(
         contentState,
-        wasKoreanOnIE ? this._previousSelection : selection,
+        (wasKoreanOnIE && !isWin10) ? this._previousSelection : selection,
         composedChars,
         currentStyle,
         entityKey
