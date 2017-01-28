@@ -77,6 +77,7 @@ let isWin10 = UserAgent.isPlatform('Windows 10');
 let isKoreanOnIE = false;
 let lastKoreanCharacter = '';
 let nextToLastKoreanCharacter = '';
+let charInCompStart = '';
 
 // Source: https://en.wikipedia.org/wiki/Korean_language_and_computers
 const KOREAN_UNICODE_RANGES = [
@@ -95,7 +96,7 @@ var DraftEditorCompositionHandler = {
   onBeforeInput: function(e: SyntheticInputEvent): void {
     // If we are typing Korean on IE11, the input event is unreliable.
     // Instead, we maintain the typed chars in the compositionStart and compositionEnd handlers.
-    if (!lastKoreanCharacter) {
+    if (!lastKoreanCharacter && !(isKoreanOnIE && /\r|\n/.test(e.data))) {
       textInputData = (textInputData || '') + e.data;
     }
   },
@@ -107,6 +108,14 @@ var DraftEditorCompositionHandler = {
   onCompositionStart: function(e): void {
     formerTextInputData = e.data;
     stillComposing = true;
+
+    // Using the Korean IME on IE11, when the user types something other than Korean using the IME,
+    // it may be that the composition start event contains the typed character, but the
+    // composition end does NOT.
+    if (isIE && e.data.length == 1 && !isKorean(e.data.charCodeAt(0))) {
+      nextToLastKoreanCharacter = '';
+      charInCompStart = e.data;
+    }
 
     // For Korean on IE11, continued composition means that the last character in the DOM
     // is the one currently being composed (and is still unfinished).
@@ -142,7 +151,10 @@ var DraftEditorCompositionHandler = {
     // characters from the DOM.
     lastKoreanCharacter = '';
     nextToLastKoreanCharacter = '';
-    if (isIE && e.data && isKorean(e.data.charCodeAt(0))) {
+    if (isIE && !e.data && charInCompStart) {
+      textInputData += charInCompStart;
+      isKoreanOnIE = true;
+    } else if (isIE && e.data && isKorean(e.data.charCodeAt(0))) {
       let domSelection = global.getSelection();
       let content = domSelection.anchorNode.textContent;
       let i = domSelection.anchorOffset - 1;
@@ -157,6 +169,7 @@ var DraftEditorCompositionHandler = {
         i--;
       }
     }
+    charInCompStart = '';
 
     setTimeout(() => {
       if (!resolved) {
@@ -252,7 +265,7 @@ var DraftEditorCompositionHandler = {
     let contentState = editorState.getCurrentContent();
     let selection = editorState.getSelection();
     if (!wasKoreanOnIE && formerComposedChars && selection.isCollapsed()) {
-      var anchorOffset = selection.getAnchorOffset() - formerComposedChars.length;
+      let anchorOffset = selection.getAnchorOffset() - formerComposedChars.length;
       if (anchorOffset < 0) {
         anchorOffset = 0;
       }
