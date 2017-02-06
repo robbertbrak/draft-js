@@ -62,6 +62,7 @@ var babelOptsFlow = {
 
 var COPYRIGHT_HEADER = `/**
  * Draft v<%= version %>
+ * Built from https://github.com/robbertbrak/draft-js/tree/0.9-stable-itrp
  *
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
