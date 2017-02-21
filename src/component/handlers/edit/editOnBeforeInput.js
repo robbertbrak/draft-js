@@ -20,6 +20,7 @@ var UserAgent = require('UserAgent');
 var getEntityKeyForSelection = require('getEntityKeyForSelection');
 var isSelectionAtLeafStart = require('isSelectionAtLeafStart');
 var nullthrows = require('nullthrows');
+var isKorean = require('isKorean');
 
 import type {DraftInlineStyle} from 'DraftInlineStyle';
 const isEventHandled = require('isEventHandled');
@@ -34,6 +35,7 @@ const isEventHandled = require('isEventHandled');
 var FF_QUICKFIND_CHAR = '\'';
 var FF_QUICKFIND_LINK_CHAR = '\/';
 var isFirefox = UserAgent.isBrowser('Firefox');
+let isIEOrEdge = UserAgent.isBrowser('IE <= 11') || UserAgent.isBrowser('Edge');
 
 function mustPreventDefaultForCharacter(character: string): boolean {
   return (
@@ -79,6 +81,14 @@ function editOnBeforeInput(e: SyntheticInputEvent): void {
   // In some cases (ex: IE ideographic space insertion) no character data
   // is provided. There's nothing to do when this happens.
   if (!chars) {
+    return;
+  }
+
+  // Composition end should always be handled by the composition handler.
+  // However, when a composition in another input field is not finished
+  // and focus is transferred to the editor,
+  // IE may fire an erroneous event on the editor. Ignore it.
+  if (isIEOrEdge && isKorean(chars.charAt(0))) {
     return;
   }
 

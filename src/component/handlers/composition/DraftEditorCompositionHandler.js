@@ -20,6 +20,7 @@ const getEntityKeyForSelection = require('getEntityKeyForSelection');
 const isSelectionAtLeafStart = require('isSelectionAtLeafStart');
 
 const UserAgent = require('UserAgent');
+const isKorean = require('isKorean');
 
 /**
  * Millisecond delay to allow `compositionstart` to fire again upon
@@ -43,6 +44,7 @@ const RESOLVE_DELAY = 20;
  * and it simplifies state management with respect to the DraftEditor component.
  */
 let resolved = false;
+let initial = true;
 let stillComposing = false;
 let textInputData = '';
 let formerTextInputData = '';
@@ -73,31 +75,29 @@ let formerTextInputData = '';
  */
 
 let isIE = UserAgent.isBrowser('IE <= 11');
+let isEdge = UserAgent.isBrowser('Edge');
 let isWin10 = UserAgent.isPlatform('Windows 10');
 let isKoreanOnIE = false;
+let offsetAtCompositionStart = 0;
+let anchorNodeAtCompositionStart = null;
 let lastKoreanCharacter = '';
 let nextToLastKoreanCharacter = '';
 let charInCompStart = '';
-
-// Source: https://en.wikipedia.org/wiki/Korean_language_and_computers
-const KOREAN_UNICODE_RANGES = [
-  [parseInt('AC00', 16), parseInt('D7A3', 16)],
-  [parseInt('1100', 16), parseInt('11FF', 16)],
-  [parseInt('3130', 16), parseInt('318F', 16)],
-  [parseInt('A960', 16), parseInt('A97F', 16)],
-  [parseInt('D7B0', 16), parseInt('D7FF', 16)]
-];
-
-let isKorean = function(charCode): boolean {
-  return KOREAN_UNICODE_RANGES.find((range) => charCode >= range[0] && charCode <= range[1]);
-};
+let charInCompUpdate = '';
 
 var DraftEditorCompositionHandler = {
   onBeforeInput: function(e: SyntheticInputEvent): void {
     // If we are typing Korean on IE11, the input event is unreliable.
     // Instead, we maintain the typed chars in the compositionStart and compositionEnd handlers.
     if (!lastKoreanCharacter && !(isKoreanOnIE && /\r|\n/.test(e.data))) {
-      textInputData = (textInputData || '') + e.data;
+      if (isEdge && e.data.length > 1 && isKorean(e.data.charAt(0))) {
+        // For some reason Edge duplicates the Korean character in the event
+        // when terminating a composition session with a mouse click.
+        // https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/11014678/
+        textInputData = (textInputData || '') + e.data.charAt(0);
+      } else {
+        textInputData = (textInputData || '') + e.data;
+      }
     }
   },
 
@@ -108,11 +108,19 @@ var DraftEditorCompositionHandler = {
   onCompositionStart: function(e): void {
     formerTextInputData = e.data;
     stillComposing = true;
+    resolved = false;
+    charInCompUpdate = '';
+
+    if (isIE) {
+      let domSelection = global.getSelection();
+      offsetAtCompositionStart = domSelection.anchorOffset - 1;
+      anchorNodeAtCompositionStart = domSelection.anchorNode;
+    }
 
     // Using the Korean IME on IE11, when the user types something other than Korean using the IME,
     // it may be that the composition start event contains the typed character, but the
     // composition end does NOT.
-    if (isIE && e.data.length == 1 && !isKorean(e.data.charCodeAt(0))) {
+    if (isIE && e.data.length == 1 && !isKorean(e.data.charAt(0))) {
       nextToLastKoreanCharacter = '';
       charInCompStart = e.data;
     }
@@ -124,6 +132,17 @@ var DraftEditorCompositionHandler = {
     if (nextToLastKoreanCharacter) {
       textInputData = textInputData.substring(0, textInputData.length - 1) + nextToLastKoreanCharacter;
       nextToLastKoreanCharacter = '';
+    }
+  },
+
+  onCompositionUpdate: function(e): void {
+    // In some cases a composition session is not ended with a key stroke,
+    // but with a mouse click, blur event or something else.
+    // When typing Korean, the last typed character may be lost
+    // if we don't keep track of what happens in the composition update events.
+    if (e.data && isKorean(e.data.charAt(0))) {
+      charInCompUpdate = e.data;
+      isKoreanOnIE = isIE;
     }
   },
 
@@ -142,7 +161,6 @@ var DraftEditorCompositionHandler = {
    * Google Input Tools on Windows 8.1 fires `compositionend` three times.
    */
   onCompositionEnd: function(e): void {
-    resolved = false;
     stillComposing = false;
 
     // For Korean on IE11, the composition end event may not contain
@@ -151,29 +169,34 @@ var DraftEditorCompositionHandler = {
     // characters from the DOM.
     lastKoreanCharacter = '';
     nextToLastKoreanCharacter = '';
-    if (isIE && !e.data && charInCompStart) {
-      textInputData += charInCompStart;
+
+    if (isIE && !e.data) {
+      textInputData += charInCompStart || charInCompUpdate;
       isKoreanOnIE = true;
-    } else if (isIE && e.data && isKorean(e.data.charCodeAt(0))) {
-      let domSelection = global.getSelection();
-      let content = domSelection.anchorNode.textContent;
-      let i = domSelection.anchorOffset - 1;
-      while (i >= 0) {
-        if (isKorean(content.charCodeAt(i))) {
-          isKoreanOnIE = true;
-          lastKoreanCharacter = content.charAt(i);
-          nextToLastKoreanCharacter = content.charAt(i - 1);
-          textInputData = (textInputData || '') + lastKoreanCharacter;
-          break;
-        }
-        i--;
+    }
+
+    if (isIE && e.data && isKorean(e.data.charAt(0))) {
+      let content = anchorNodeAtCompositionStart.textContent, i = offsetAtCompositionStart;
+      if (!charInCompUpdate) {
+        let domSelection = global.getSelection();
+        content = domSelection.anchorNode.textContent;
+        i = domSelection.anchorOffset - 1;
+      }
+
+      if (isKorean(content.charAt(i))) {
+        isKoreanOnIE = true;
+        lastKoreanCharacter = content.charAt(i);
+        nextToLastKoreanCharacter = content.charAt(i - 1);
+        textInputData = (textInputData || '') + lastKoreanCharacter;
       }
     }
+
     charInCompStart = '';
+    charInCompUpdate = '';
 
     setTimeout(() => {
       if (!resolved) {
-        DraftEditorCompositionHandler.resolveComposition.call(this);
+        DraftEditorCompositionHandler.resolveComposition.call(this, 'insert-characters');
       }
     }, isKoreanOnIE ? 0 : RESOLVE_DELAY);
   },
@@ -190,6 +213,7 @@ var DraftEditorCompositionHandler = {
     if (isKoreanOnIE) {
       lastKoreanCharacter = '';
       nextToLastKoreanCharacter = '';
+      charInCompUpdate = '';
     }
   },
 
@@ -203,6 +227,17 @@ var DraftEditorCompositionHandler = {
     if (e.which === Keys.RETURN) {
       e.preventDefault();
     }
+  },
+
+  /**
+   * Blurring leads to composition termination without a compositionend event.
+   * Make sure we do terminate the composition session using whatever data we have.
+   */
+  onBlur: function(e: SyntheticKeyboardEvent): void {
+    e.preventDefault();
+    stillComposing = false;
+    textInputData = (textInputData || '') + charInCompUpdate;
+    DraftEditorCompositionHandler.resolveComposition.call(this, 'commit-blurred-composition');
   },
 
   /**
@@ -220,17 +255,20 @@ var DraftEditorCompositionHandler = {
    * Resetting innerHTML will move focus to the beginning of the editor,
    * so we update to force it back to the correct place.
    */
-  resolveComposition: function(): void {
+  resolveComposition: function(editorChangeType: string): void {
     if (stillComposing) {
       return;
     }
 
     resolved = true;
+    initial = true;
 
     const wasKoreanOnIE = isKoreanOnIE;
     isKoreanOnIE = false;
     lastKoreanCharacter = '';
     nextToLastKoreanCharacter = '';
+    offsetAtCompositionStart = null;
+    anchorNodeAtCompositionStart = null;
 
     const composedChars = textInputData;
     textInputData = '';
@@ -290,13 +328,12 @@ var DraftEditorCompositionHandler = {
         currentStyle,
         entityKey
       );
-      this.update(
-        EditorState.push(
+      let newEditorState = EditorState.push(
           editorState,
           contentState,
-          'insert-characters'
-        )
+          editorChangeType
       );
+      this.update(newEditorState);
       return;
     }
 

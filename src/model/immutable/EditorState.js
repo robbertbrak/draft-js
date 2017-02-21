@@ -344,7 +344,7 @@ class EditorState {
       return editorState;
     }
 
-    var forceSelection = changeType !== 'insert-characters';
+    var forceSelection = changeType !== 'insert-characters' && changeType !== 'commit-blurred-composition';
     var directionMap = EditorBidiService.getDirectionMap(
       contentState,
       editorState.getDirectionMap()
