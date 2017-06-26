@@ -77,6 +77,7 @@ let formerTextInputData = '';
 let isIE = UserAgent.isBrowser('IE <= 11');
 let isEdge = UserAgent.isBrowser('Edge');
 let isWin10 = UserAgent.isPlatform('Windows 10');
+let isAndroid7 = UserAgent.isPlatform('Android >= 7');
 let isKoreanOnIE = false;
 let offsetAtCompositionStart = 0;
 let anchorNodeAtCompositionStart = null;
@@ -189,6 +190,12 @@ var DraftEditorCompositionHandler = {
         nextToLastKoreanCharacter = content.charAt(i - 1);
         textInputData = (textInputData || '') + lastKoreanCharacter;
       }
+    }
+
+    // In Android 7+ there is (unlike Android 6-) no textInput event just before ending composition.
+    // Rely on the data in the composition end event instead.
+    if (isAndroid7 && e.data && !textInputData) {
+      textInputData = e.data;
     }
 
     charInCompStart = '';
