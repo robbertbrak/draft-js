@@ -152,6 +152,10 @@ function addPointToSelection(
   var range = document.createRange();
   range.setStart(node, offset);
   selection.addRange(range);
+  // Taken from https://github.com/facebook/draft-js/pull/1190
+  if (selection.rangeCount === 0) {
+    selection.addRange(range);
+  }
 }
 
 module.exports = setDraftEditorSelection;
