@@ -130,6 +130,7 @@ function editOnPaste(e: SyntheticClipboardEvent): void {
       clone.parentNode.removeChild(clone);
       this.exitCurrentMode();
       this.removeRenderGuard();
+      this.focus();
       handlePastedText.call(this, data, text, html);
     }, 0);
   } else {
