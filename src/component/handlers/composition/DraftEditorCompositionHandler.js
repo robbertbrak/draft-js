@@ -330,7 +330,7 @@ var DraftEditorCompositionHandler = {
       // been overwritten at the start of the composition session, so we'll reset it here.
       contentState = DraftModifier.replaceText(
         contentState,
-        (wasKoreanOnIE && !isWin10) ? this._previousSelection : selection,
+        (wasKoreanOnIE && !isWin10 && this._previousSelection) ? this._previousSelection : selection,
         composedChars,
         currentStyle,
         entityKey
