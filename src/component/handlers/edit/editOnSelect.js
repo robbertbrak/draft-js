@@ -17,7 +17,13 @@ var ReactDOM = require('ReactDOM');
 
 var getDraftEditorSelection = require('getDraftEditorSelection');
 
-function editOnSelect(): void {
+const UserAgent = require('UserAgent');
+const Keys = require('Keys');
+
+let isIE = UserAgent.isBrowser('IE <= 11');
+let keys = [Keys.HOME, Keys.END, Keys.LEFT, Keys.RIGHT];
+
+function editOnSelect(event): void {
   if (this._blockSelectEvents) {
     return;
   }
@@ -31,7 +37,14 @@ function editOnSelect(): void {
 
   if (updatedSelectionState !== editorState.getSelection()) {
     this._previousSelection = editorState.getSelection();
-    if (documentSelection.needsRecovery) {
+    // Accepting instead of forcing the selection during cursor movements may in rare cases
+    // lead to issues with IE and Korean input.
+    // To avoid this we always force the selection in IE when a selection change is
+    // triggered by a cursor movement.
+    let forceSelection = isIE && event && updatedSelectionState.isCollapsed()
+        && event.nativeEvent.type === 'keyup' && keys.indexOf(event.nativeEvent.which) >= 0;
+
+    if (documentSelection.needsRecovery || forceSelection) {
       editorState = EditorState.forceSelection(
         editorState,
         updatedSelectionState
@@ -42,6 +55,7 @@ function editOnSelect(): void {
         updatedSelectionState
       );
     }
+
     this.update(editorState);
   }
 }

@@ -90,7 +90,7 @@ var DraftEditorCompositionHandler = {
   onBeforeInput: function(e: SyntheticInputEvent): void {
     // If we are typing Korean on IE11, the input event is unreliable.
     // Instead, we maintain the typed chars in the compositionStart and compositionEnd handlers.
-    if (!lastKoreanCharacter && !(isKoreanOnIE && /\r|\n/.test(e.data))) {
+    if (!lastKoreanCharacter && !(isKoreanOnIE && /[\r\n\u001b]/.test(e.data))) {
       if (isEdge && e.data.length > 1 && isKorean(e.data.charAt(0))) {
         // For some reason Edge duplicates the Korean character in the event
         // when terminating a composition session with a mouse click.
