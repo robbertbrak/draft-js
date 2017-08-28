@@ -13,11 +13,7 @@
 
 'use strict';
 
-var UnicodeUtils = require('UnicodeUtils');
-
 var {OrderedSet} = require('immutable');
-
-var {substr} = UnicodeUtils;
 
 import type {DraftInlineStyle} from 'DraftInlineStyle';
 
@@ -33,8 +29,8 @@ function decodeInlineStyleRanges(
   var styles = Array(text.length).fill(EMPTY_SET);
   if (ranges) {
     ranges.forEach((/*object*/ range) => {
-      var cursor = substr(text, 0, range.offset).length;
-      var end = cursor + substr(text, range.offset, range.length).length;
+      var cursor = range.offset;
+      var end = cursor + range.length;
       while (cursor < end) {
         styles[cursor] = styles[cursor].add(range.style);
         cursor++;

@@ -12,8 +12,6 @@
 
 'use strict';
 
-var UnicodeUtils = require('UnicodeUtils');
-
 var findRangesImmutable = require('findRangesImmutable');
 
 import type ContentBlock from 'ContentBlock';
@@ -49,8 +47,8 @@ function getEncodedInlinesForType(
     (start, end) => {
       var text = block.getText();
       ranges.push({
-        offset: UnicodeUtils.strlen(text.slice(0, start)),
-        length: UnicodeUtils.strlen(text.slice(start, end)),
+        offset: text.slice(0, start).length,
+        length: text.slice(start, end).length,
         style: styleToEncode,
       });
     }
