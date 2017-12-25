@@ -45,6 +45,27 @@ function editOnInput(): void {
     return;
   }
 
+  if (
+      anchorNode.nodeType === Node.TEXT_NODE &&
+      (anchorNode.previousSibling !== null || anchorNode.nextSibling !== null)
+  ) {
+    // When typing at the beginning of a visual line, Chrome splits the text
+    // nodes into two. Why? No one knows. This commit is suspicious:
+    // https://chromium.googlesource.com/chromium/src/+/a3b600981286b135632371477f902214c55a1724
+    // To work around, we'll merge the sibling text nodes back into this one.
+    const span = anchorNode.parentNode;
+    anchorNode.nodeValue = span.textContent;
+    for (
+        let child = span.firstChild;
+        child !== null;
+        child = child.nextSibling
+    ) {
+      if (child !== anchorNode) {
+        span.removeChild(child);
+      }
+    }
+  }
+
   var domText = anchorNode.textContent;
   var {editorState} = this.props;
   var offsetKey = nullthrows(findAncestorOffsetKey(anchorNode));
