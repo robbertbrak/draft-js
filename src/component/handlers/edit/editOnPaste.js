@@ -118,7 +118,7 @@ function editOnPaste(e: SyntheticClipboardEvent): void {
     clone.setAttribute(
         'style',
         'position: fixed; left: -9999px');
-    contentContainer.parentNode.insertBefore(clone, contentContainer);
+    document.body.appendChild(clone);
     clone.focus();
 
     this.setRenderGuard();
