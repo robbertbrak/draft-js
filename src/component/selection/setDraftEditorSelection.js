@@ -125,24 +125,28 @@ function addFocusToSelection(
   node: Node,
   offset: number
 ): void {
-  if (selection.extend && containsNode(getActiveElement(), node)) {
-    // If `extend` is called while another element has focus, an error is
-    // thrown. We therefore disable `extend` if the active element is somewhere
-    // other than the node we are selecting. This should only occur in Firefox,
-    // since it is the only browser to support multiple selections.
-    // See https://bugzilla.mozilla.org/show_bug.cgi?id=921444.
-    selection.extend(node, offset);
-  } else {
-    // IE doesn't support extend. This will mean no backward selection.
-    // Extract the existing selection range and add focus to it.
-    // Additionally, clone the selection range. IE11 throws an
-    // InvalidStateError when attempting to access selection properties
-    // after the range is detached.
-    if (selection.rangeCount > 0) {
-      var range = selection.getRangeAt(0);
-      range.setEnd(node, offset);
-      selection.addRange(range.cloneRange());
+  try {
+    if (selection.extend && containsNode(getActiveElement(), node)) {
+      // If `extend` is called while another element has focus, an error is
+      // thrown. We therefore disable `extend` if the active element is somewhere
+      // other than the node we are selecting. This should only occur in Firefox,
+      // since it is the only browser to support multiple selections.
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=921444.
+      selection.extend(node, offset);
+    } else {
+      // IE doesn't support extend. This will mean no backward selection.
+      // Extract the existing selection range and add focus to it.
+      // Additionally, clone the selection range. IE11 throws an
+      // InvalidStateError when attempting to access selection properties
+      // after the range is detached.
+      if (selection.rangeCount > 0) {
+        var range = selection.getRangeAt(0);
+        range.setEnd(node, offset);
+        selection.addRange(range.cloneRange());
+      }
     }
+  } catch (e) {
+    console.warn('failed to add focus to selection', e, selection, node, offset);
   }
 }
 
@@ -151,12 +155,16 @@ function addPointToSelection(
   node: Node,
   offset: number
 ): void {
-  var range = document.createRange();
-  range.setStart(node, offset);
-  selection.addRange(range);
-  // Taken from https://github.com/facebook/draft-js/pull/1190
-  if (selection.rangeCount === 0) {
+  try {
+    var range = document.createRange();
+    range.setStart(node, offset);
     selection.addRange(range);
+    // Taken from https://github.com/facebook/draft-js/pull/1190
+    if (selection.rangeCount === 0) {
+      selection.addRange(range);
+    }
+  } catch (e) {
+    console.warn('failed to add point to selection', e, selection, node, offset);
   }
 }
 
