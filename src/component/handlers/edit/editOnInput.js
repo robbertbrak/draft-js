@@ -18,6 +18,8 @@ var EditorState = require('EditorState');
 var Entity = require('DraftEntity');
 var UserAgent = require('UserAgent');
 
+var keyCommandPlainBackspace = require('keyCommandPlainBackspace');
+
 var findAncestorOffsetKey = require('findAncestorOffsetKey');
 var nullthrows = require('nullthrows');
 
@@ -37,8 +39,13 @@ var DOUBLE_NEWLINE = '\n\n';
  * when an `input` change leads to a DOM/model mismatch, the change should be
  * due to a spellcheck change, and we can incorporate it into our model.
  */
-function editOnInput(): void {
+function editOnInput(e): void {
+  var {editorState} = this.props;
   var domSelection = global.getSelection();
+
+  if (editorState.isInCompositionMode()) {
+    editorState = EditorState.set(editorState, {inCompositionMode: false});
+  }
 
   var {anchorNode, isCollapsed} = domSelection;
   if (anchorNode.nodeType !== Node.TEXT_NODE && anchorNode.nodeType !== Node.ELEMENT_NODE) {
@@ -67,7 +74,7 @@ function editOnInput(): void {
   }
 
   var domText = anchorNode.textContent;
-  var {editorState} = this.props;
+
   var offsetKey = nullthrows(findAncestorOffsetKey(anchorNode));
   var {blockKey, decoratorKey, leafKey} = DraftOffsetKey.decode(offsetKey);
 
@@ -77,6 +84,32 @@ function editOnInput(): void {
 
   var content = editorState.getCurrentContent();
   var block = content.getBlockForKey(blockKey);
+  var selection = editorState.getSelection();
+
+  // Special case for backwards deletion on Android.
+  // Pressing the backspace key on the soft keyboard does not always trigger a 'backspace' keydown event,
+  // so we try to detect it by comparing the editor selection (as it was before the input event)
+  // with the actual cursor position.
+  // If the cursor is in a smaller block than before, or in the same block but in a smaller leaf than before,
+  // we perform a backspace command to sync the editorstate with the DOM
+  if (isAndroid && e && e.nativeEvent.type === 'input') {
+    var blocksArray = content.getBlocksAsArray();
+    var isDeletion = blocksArray.indexOf(block) < blocksArray.indexOf(content.getBlockForKey(selection.getEndKey()))
+        || end < selection.getEndOffset();
+    if (isDeletion) {
+      this.restoreEditorDOM(undefined);
+      editorState = EditorState.set(editorState, {
+        selection: selection.merge({
+          anchorKey: blockKey, anchorOffset: start + domSelection.anchorOffset,
+          focusKey: selection.getEndKey(), focusOffset: selection.getEndOffset(),
+          isBackward: false
+        })
+      });
+      this.update(keyCommandPlainBackspace(editorState));
+      return;
+    }
+  }
+
   var modelText = block.getText().slice(start, end);
 
   // Special-case soft newlines here. If the DOM text ends in a soft newline,
@@ -92,7 +125,6 @@ function editOnInput(): void {
     return;
   }
 
-  var selection = editorState.getSelection();
 
   // We'll replace the entire leaf with the text content of the target.
   var targetRange = selection.merge({

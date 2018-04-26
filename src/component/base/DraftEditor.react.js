@@ -57,8 +57,7 @@ const handlerMap = {
 };
 
 type State = {
-  containerKey: number,
-  contentsKey: number,
+  contentsKey: number
 };
 
 /**
@@ -118,7 +117,7 @@ class DraftEditor extends React.Component {
   blur: () => void;
   setMode: (mode: DraftEditorModes) => void;
   exitCurrentMode: () => void;
-  restoreEditorDOM: (scrollPosition: DraftScrollPosition, keyToUse: string) => void;
+  restoreEditorDOM: (scrollPosition: DraftScrollPosition) => void;
   setRenderGuard: () => void;
   removeRenderGuard: () => void;
   setClipboard: (clipboard?: BlockMap) => void;
@@ -177,7 +176,7 @@ class DraftEditor extends React.Component {
     this.onDragLeave = this._onDragLeave.bind(this);
 
     // See `_restoreEditorDOM()`.
-    this.state = {containerKey: 0, contentsKey: 0};
+    this.state = {contentsKey: 0};
   }
 
   /**
@@ -235,7 +234,6 @@ class DraftEditor extends React.Component {
       <div className={rootClass}>
         {this._renderPlaceholder()}
         <div
-          key={'editor' + this.state.containerKey}
           className={cx('DraftEditor/editorContainer')}
           ref="editorContainer">
           <div
@@ -395,14 +393,8 @@ class DraftEditor extends React.Component {
    * state (cut command, IME) and we want to make sure that reconciliation
    * occurs on a version of the DOM that is synchronized with our EditorState.
    */
-  _restoreEditorDOM(scrollPosition?: DraftScrollPosition, keyToUse?: string): void {
-    let newState = {};
-    if (typeof(keyToUse) === "undefined") {
-      keyToUse = "containerKey";
-    }
-	newState[keyToUse] = this.state[keyToUse] + 1;
-
-    this.setState(newState, () => {
+  _restoreEditorDOM(scrollPosition?: DraftScrollPosition): void {
+    this.setState({contentsKey: this.state.contentsKey + 1}, () => {
       this._focus(scrollPosition);
     });
   }

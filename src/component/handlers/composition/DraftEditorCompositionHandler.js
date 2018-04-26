@@ -44,7 +44,6 @@ const RESOLVE_DELAY = 20;
  * and it simplifies state management with respect to the DraftEditor component.
  */
 let resolved = false;
-let initial = true;
 let stillComposing = false;
 let textInputData = '';
 let formerTextInputData = '';
@@ -193,9 +192,16 @@ var DraftEditorCompositionHandler = {
     }
 
     // In Android 7+ there is (unlike Android 6-) no textInput event just before ending composition.
-    // Rely on the data in the composition end event instead.
-    if (isAndroid7 && e.data && !textInputData) {
-      textInputData = e.data;
+    // Rely on native handling instead.
+    if (isAndroid7) {
+      if (isSelectionAtLeafStart(this.props.editorState)) {
+        this.restoreEditorDOM(undefined);
+      }
+      this.exitCurrentMode();
+      this.removeRenderGuard();
+      this._onInput(e);
+      textInputData = ''; // Reset the composition handler.
+      return;
     }
 
     charInCompStart = '';
@@ -268,7 +274,6 @@ var DraftEditorCompositionHandler = {
     }
 
     resolved = true;
-    initial = true;
 
     const wasKoreanOnIE = isKoreanOnIE;
     isKoreanOnIE = false;
@@ -301,7 +306,7 @@ var DraftEditorCompositionHandler = {
     );
 
     if (mustReset) {
-      this.restoreEditorDOM(undefined, ((composedChars && composedChars.length > 0) ? "contentsKey" : "containerKey"));
+      this.restoreEditorDOM(undefined);
     }
 
     this.exitCurrentMode();
