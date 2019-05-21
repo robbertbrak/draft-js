@@ -92,7 +92,10 @@ function editOnPaste(editor: DraftEditor, e: SyntheticClipboardEvent<>): void {
 
   let textBlocks: Array<string> = [];
   const text = data.getText();
-  const html = data.getHTML();
+  let html = data.getHTML();
+
+  if (html && text && html.replace(/\r\n/g, '\n') === text) html = null;
+
   const editorState = editor._latestEditorState;
 
   if (
@@ -115,7 +118,7 @@ function editOnPaste(editor: DraftEditor, e: SyntheticClipboardEvent<>): void {
     // editor in Firefox and IE will not include empty lines. The resulting
     // paste will preserve the newlines correctly.
     const internalClipboard = editor.getClipboard();
-    if (data.isRichText() && internalClipboard) {
+    if (data.isRichText() && html && internalClipboard) {
       if (
         // If the editorKey is present in the pasted HTML, it should be safe to
         // assume this is an internal paste.
