@@ -123,6 +123,20 @@ const DraftEditorCompositionHandler = {
   },
 
   /**
+   * Blurring leads to composition termination without a compositionend event.
+   * Make sure we resolve the composition first.
+   */
+  onBlur: function(editor: DraftEditor, e: SyntheticKeyboardEvent): void {
+    e.preventDefault();
+    stillComposing = false;
+    DraftEditorCompositionHandler.resolveComposition(editor);
+    setTimeout(function() {
+      editor.blur()
+    }, 0);
+  },
+
+
+  /**
    * Attempt to insert composed characters into the document.
    *
    * If we are still in a composition session, do nothing. Otherwise, insert
