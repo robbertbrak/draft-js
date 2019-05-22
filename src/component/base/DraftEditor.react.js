@@ -54,6 +54,7 @@ const handlerMap = {
   composite: DraftEditorCompositionHandler,
   drag: DraftEditorDragHandler,
   cut: null,
+  paste: null,
   render: null,
 };
 
