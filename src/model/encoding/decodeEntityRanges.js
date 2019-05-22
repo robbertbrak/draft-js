@@ -11,10 +11,6 @@
 
 'use strict';
 
-const UnicodeUtils = require('UnicodeUtils');
-
-const {substr} = UnicodeUtils;
-
 /**
  * Convert to native JavaScript string lengths to determine ranges.
  */
@@ -25,10 +21,8 @@ function decodeEntityRanges(
   const entities = Array(text.length).fill(null);
   if (ranges) {
     ranges.forEach(range => {
-      // Using Unicode-enabled substrings converted to JavaScript lengths,
-      // fill the output array with entity keys.
-      const start = substr(text, 0, range.offset).length;
-      const end = start + substr(text, range.offset, range.length).length;
+      const start = range.offset;
+      const end = start + range.length;
       for (let ii = start; ii < end; ii++) {
         entities[ii] = range.key;
       }
