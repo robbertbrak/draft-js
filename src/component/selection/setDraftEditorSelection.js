@@ -233,78 +233,84 @@ function addFocusToSelection(
   offset: number,
   selectionState: SelectionState,
 ): void {
-  const activeElement = getActiveElement();
-  if (selection.extend && containsNode(activeElement, node)) {
-    // If `extend` is called while another element has focus, an error is
-    // thrown. We therefore disable `extend` if the active element is somewhere
-    // other than the node we are selecting. This should only occur in Firefox,
-    // since it is the only browser to support multiple selections.
-    // See https://bugzilla.mozilla.org/show_bug.cgi?id=921444.
+  try {
+    const activeElement = getActiveElement();
+    if (selection.extend && containsNode(activeElement, node)) {
+      // If `extend` is called while another element has focus, an error is
+      // thrown. We therefore disable `extend` if the active element is somewhere
+      // other than the node we are selecting. This should only occur in Firefox,
+      // since it is the only browser to support multiple selections.
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=921444.
 
-    // logging to catch bug that is being reported in t16250795
-    if (offset > getNodeLength(node)) {
-      // the call to 'selection.extend' is about to throw
-      DraftJsDebugLogging.logSelectionStateFailure({
-        anonymizedDom: getAnonymizedEditorDOM(node),
-        extraParams: JSON.stringify({offset: offset}),
-        selectionState: JSON.stringify(selectionState.toJS()),
-      });
-    }
+      // logging to catch bug that is being reported in t16250795
+      if (offset > getNodeLength(node)) {
+        // the call to 'selection.extend' is about to throw
+        DraftJsDebugLogging.logSelectionStateFailure({
+          anonymizedDom: getAnonymizedEditorDOM(node),
+          extraParams: JSON.stringify({offset: offset}),
+          selectionState: JSON.stringify(selectionState.toJS()),
+        });
+      }
 
-    // logging to catch bug that is being reported in t18110632
-    const nodeWasFocus = node === selection.focusNode;
-    try {
-      selection.extend(node, offset);
-    } catch (e) {
-      DraftJsDebugLogging.logSelectionStateFailure({
-        anonymizedDom: getAnonymizedEditorDOM(node, function(n) {
-          const labels = [];
-          if (n === activeElement) {
-            labels.push('active element');
-          }
-          if (n === selection.anchorNode) {
-            labels.push('selection anchor node');
-          }
-          if (n === selection.focusNode) {
-            labels.push('selection focus node');
-          }
-          return labels;
-        }),
-        extraParams: JSON.stringify(
-          {
-            activeElementName: activeElement ? activeElement.nodeName : null,
-            nodeIsFocus: node === selection.focusNode,
-            nodeWasFocus: nodeWasFocus,
-            selectionRangeCount: selection.rangeCount,
-            selectionAnchorNodeName: selection.anchorNode
-              ? selection.anchorNode.nodeName
-              : null,
-            selectionAnchorOffset: selection.anchorOffset,
-            selectionFocusNodeName: selection.focusNode
-              ? selection.focusNode.nodeName
-              : null,
-            selectionFocusOffset: selection.focusOffset,
-            message: e ? '' + e : null,
-            offset: offset,
-          },
-          null,
-          2,
-        ),
-        selectionState: JSON.stringify(selectionState.toJS(), null, 2),
-      });
-      // allow the error to be thrown -
-      // better than continuing in a broken state
-      throw e;
+      // logging to catch bug that is being reported in t18110632
+      const nodeWasFocus = node === selection.focusNode;
+      try {
+        selection.extend(node, offset);
+      } catch (e) {
+        DraftJsDebugLogging.logSelectionStateFailure({
+          anonymizedDom: getAnonymizedEditorDOM(node, function(n) {
+            const labels = [];
+            if (n === activeElement) {
+              labels.push('active element');
+            }
+            if (n === selection.anchorNode) {
+              labels.push('selection anchor node');
+            }
+            if (n === selection.focusNode) {
+              labels.push('selection focus node');
+            }
+            return labels;
+          }),
+          extraParams: JSON.stringify(
+            {
+              activeElementName: activeElement ? activeElement.nodeName : null,
+              nodeIsFocus: node === selection.focusNode,
+              nodeWasFocus: nodeWasFocus,
+              selectionRangeCount: selection.rangeCount,
+              selectionAnchorNodeName: selection.anchorNode
+                ? selection.anchorNode.nodeName
+                : null,
+              selectionAnchorOffset: selection.anchorOffset,
+              selectionFocusNodeName: selection.focusNode
+                ? selection.focusNode.nodeName
+                : null,
+              selectionFocusOffset: selection.focusOffset,
+              message: e ? '' + e : null,
+              offset: offset,
+            },
+            null,
+            2,
+          ),
+          selectionState: JSON.stringify(selectionState.toJS(), null, 2),
+        });
+        // allow the error to be thrown -
+        // better than continuing in a broken state
+        throw e;
+      }
+    } else {
+      // IE doesn't support extend. This will mean no backward selection.
+      // Extract the existing selection range and add focus to it.
+      // Additionally, clone the selection range. IE11 throws an
+      // InvalidStateError when attempting to access selection properties
+      // after the range is detached.
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.setEnd(node, offset);
+        selection.addRange(range.cloneRange());
+      }
     }
-  } else {
-    // IE doesn't support extend. This will mean no backward selection.
-    // Extract the existing selection range and add focus to it.
-    // Additionally, clone the selection range. IE11 throws an
-    // InvalidStateError when attempting to access selection properties
-    // after the range is detached.
-    const range = selection.getRangeAt(0);
-    range.setEnd(node, offset);
-    selection.addRange(range.cloneRange());
+  } catch (e) {
+    console.warn('failed to add focus to selection', e, selection, node, offset, JSON.stringify(selectionState.toJS()));
   }
 }
 
@@ -314,19 +320,23 @@ function addPointToSelection(
   offset: number,
   selectionState: SelectionState,
 ): void {
-  const range = document.createRange();
-  // logging to catch bug that is being reported in t16250795
-  if (offset > getNodeLength(node)) {
-    // in this case we know that the call to 'range.setStart' is about to throw
-    DraftJsDebugLogging.logSelectionStateFailure({
-      anonymizedDom: getAnonymizedEditorDOM(node),
-      extraParams: JSON.stringify({offset: offset}),
-      selectionState: JSON.stringify(selectionState.toJS()),
-    });
-    DraftEffects.handleExtensionCausedError();
+  try {
+    const range = document.createRange();
+    // logging to catch bug that is being reported in t16250795
+    if (offset > getNodeLength(node)) {
+      // in this case we know that the call to 'range.setStart' is about to throw
+      DraftJsDebugLogging.logSelectionStateFailure({
+        anonymizedDom: getAnonymizedEditorDOM(node),
+        extraParams: JSON.stringify({offset: offset}),
+        selectionState: JSON.stringify(selectionState.toJS()),
+      });
+      DraftEffects.handleExtensionCausedError();
+    }
+    range.setStart(node, offset);
+    selection.addRange(range);
+  } catch (e) {
+    console.warn('failed to add point to selection', e, selection, node, offset, JSON.stringify(selectionState.toJS()));
   }
-  range.setStart(node, offset);
-  selection.addRange(range);
 }
 
 module.exports = setDraftEditorSelection;
