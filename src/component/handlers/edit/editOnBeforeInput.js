@@ -23,6 +23,7 @@ const isEventHandled = require('isEventHandled');
 const isSelectionAtLeafStart = require('isSelectionAtLeafStart');
 const nullthrows = require('nullthrows');
 const setImmediate = require('setImmediate');
+var isKorean = require('isKorean');
 
 // When nothing is focused, Firefox regards two characters, `'` and `/`, as
 // commands that should open and focus the "quickfind" search bar. This should
@@ -34,6 +35,7 @@ const setImmediate = require('setImmediate');
 const FF_QUICKFIND_CHAR = "'";
 const FF_QUICKFIND_LINK_CHAR = '/';
 const isFirefox = UserAgent.isBrowser('Firefox');
+let isIEOrEdge = UserAgent.isBrowser('IE <= 11') || UserAgent.isBrowser('Edge');
 
 function mustPreventDefaultForCharacter(character: string): boolean {
   return (
@@ -93,6 +95,14 @@ function editOnBeforeInput(
   // In some cases (ex: IE ideographic space insertion) no character data
   // is provided. There's nothing to do when this happens.
   if (!chars) {
+    return;
+  }
+
+  // Composition end should always be handled by the composition handler.
+  // However, when a composition in another input field is not finished
+  // and focus is transferred to the editor,
+  // IE may fire an erroneous event on the editor. Ignore it.
+  if (isIEOrEdge && isKorean(chars.charAt(0))) {
     return;
   }
 
