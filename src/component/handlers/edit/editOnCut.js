@@ -44,7 +44,8 @@ function editOnCut(editor: DraftEditor, e: SyntheticClipboardEvent<>): void {
   // Track the current scroll position so that it can be forced back in place
   // after the editor regains control of the DOM.
   if (element instanceof Node) {
-    scrollPosition = getScrollPosition(Style.getScrollParent(element));
+    const scrollParent = Style.getScrollParent(ReactDOM.findDOMNode(editor.editorContainer) || e.target);
+    scrollPosition = getScrollPosition(scrollParent);
   }
 
   const fragment = getFragmentFromSelection(editorState);
