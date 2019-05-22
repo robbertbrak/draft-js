@@ -217,7 +217,7 @@ const DraftEditorCompositionHandler = {
       contentState = DraftModifier.replaceText(
         contentState,
         replacementRange,
-        composedChars,
+        composedChars.replace(/[\n\r]+$/, ''),
         currentStyle,
         entityKey,
       );
