@@ -119,6 +119,8 @@ class DOMObserver {
       // updated properly.
       if (removedNodes && removedNodes.length) {
         return '';
+      } else if (target.textContent !== '') {
+        return target.textContent;
       }
     }
     return null;
