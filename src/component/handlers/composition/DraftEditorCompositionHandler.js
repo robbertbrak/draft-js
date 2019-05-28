@@ -190,6 +190,8 @@ const DraftEditorCompositionHandler = {
 
     let contentState = editorState.getCurrentContent();
     mutations.forEach((composedChars, offsetKey) => {
+      composedChars = composedChars.replace(/[\n\r]+$/, '');
+
       const {blockKey, decoratorKey, leafKey} = DraftOffsetKey.decode(
         offsetKey,
       );
@@ -197,6 +199,12 @@ const DraftEditorCompositionHandler = {
       const {start, end} = editorState
         .getBlockTree(blockKey)
         .getIn([decoratorKey, 'leaves', leafKey]);
+
+      const block = contentState.getBlockForKey(blockKey);
+      if (composedChars === block.getText().substring(start, end)) {
+        // If the current content wasn't changed by the mutation, don't do anything.
+        return;
+      }
 
       const replacementRange = editorState.getSelection().merge({
         anchorKey: blockKey,
@@ -210,14 +218,13 @@ const DraftEditorCompositionHandler = {
         contentState,
         replacementRange,
       );
-      const currentStyle = contentState
-        .getBlockForKey(blockKey)
+      const currentStyle = block
         .getInlineStyleAt(start);
 
       contentState = DraftModifier.replaceText(
         contentState,
         replacementRange,
-        composedChars.replace(/[\n\r]+$/, ''),
+        composedChars,
         currentStyle,
         entityKey,
       );
