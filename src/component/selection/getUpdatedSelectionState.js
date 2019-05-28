@@ -47,6 +47,11 @@ function getUpdatedSelectionState(
     .getBlockTree(focusBlockKey)
     .getIn([focusPath.decoratorKey, 'leaves', focusPath.leafKey]);
 
+  if (!anchorLeaf || !focusLeaf) {
+    // If we cannot make sense of the updated selection state, stick to the current one.
+    return selection;
+  }
+
   const anchorLeafStart: number = anchorLeaf.get('start');
   const focusLeafStart: number = focusLeaf.get('start');
 
